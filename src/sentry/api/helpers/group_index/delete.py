@@ -6,7 +6,6 @@ from collections.abc import Sequence
 from typing import Literal
 from uuid import uuid4
 
-import rest_framework
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -149,10 +148,6 @@ def delete_groups(
 
     if not group_list:
         return Response(status=204)
-
-    non_error_group_found = any(group.issue_category != GroupCategory.ERROR for group in group_list)
-    if non_error_group_found:
-        raise rest_framework.exceptions.ValidationError(detail="Only error issues can be deleted.")
 
     groups_by_project_id = defaultdict(list)
     for group in group_list:

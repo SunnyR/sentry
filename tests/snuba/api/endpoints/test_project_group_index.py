@@ -1583,13 +1583,6 @@ class GroupDeleteTest(APITestCase, SnubaTestCase):
         self.login_as(user=self.user)
         url = f"{self.path}?id={group1.id}&id={group2.id}"
 
-        response = self.client.delete(url, format="json")
-
-        # We do not support issue platform deletions
-        assert response.status_code == 400
-        self.assert_groups_not_deleted([group1, group2])
-
-        # We are allowed to delete the groups with the feature flag enabled
         with self.tasks():
             response = self.client.delete(url, format="json")
             assert response.status_code == 204
