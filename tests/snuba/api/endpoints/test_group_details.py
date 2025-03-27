@@ -344,7 +344,6 @@ class GroupDetailsTest(APITestCase, SnubaTestCase):
             assert not Group.objects.filter(id=group.id).exists()
 
     def test_delete_issue_platform_issue(self) -> Any:
-        """Test that a user cannot delete an issue if issue platform deletion is not allowed"""
         self.login_as(user=self.user)
 
         group = self.create_group(
@@ -352,11 +351,7 @@ class GroupDetailsTest(APITestCase, SnubaTestCase):
             project=self.project,
             type=PerformanceSlowDBQueryGroupType.type_id,
         )
-
         url = f"/api/0/issues/{group.id}/"
-        response = self.client.delete(url, format="json")
-        assert response.status_code == 400
-        assert response.json() == ["Only error issues can be deleted."]
 
         with patch(
             "sentry.api.helpers.group_index.delete.delete_groups_task.apply_async"
