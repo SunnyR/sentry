@@ -393,7 +393,7 @@ def migrate_resolve_threshold_data_conditions(
 
     # TODO: add resolution actions
     action_filter = DataCondition.objects.create(
-        comparison=None,
+        comparison={},
         condition_result=True,
         type=Condition.ISSUE_PRIORITY_DEESCALATING,
         condition_group=data_condition_group,

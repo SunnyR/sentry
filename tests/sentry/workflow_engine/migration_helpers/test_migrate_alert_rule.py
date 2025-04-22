@@ -125,12 +125,10 @@ def assert_alert_rule_resolve_trigger_migrated(alert_rule):
     workflow = alert_rule_workflow.workflow
     workflow_dcgs = DataConditionGroup.objects.filter(workflowdataconditiongroup__workflow=workflow)
 
-    data_condition = DataCondition.objects.get(
-        comparison=DetectorPriorityLevel.OK, condition_group__in=workflow_dcgs
-    )
+    data_condition = DataCondition.objects.get(comparison={}, condition_group__in=workflow_dcgs)
 
-    assert data_condition.type == Condition.ISSUE_PRIORITY_EQUALS
-    assert data_condition.comparison == DetectorPriorityLevel.OK
+    assert data_condition.type == Condition.ISSUE_PRIORITY_DEESCALATING
+    assert data_condition.comparison == {}
     assert data_condition.condition_result is True
     assert WorkflowDataConditionGroup.objects.filter(
         condition_group=data_condition.condition_group
@@ -709,9 +707,11 @@ class DualWriteAlertRuleTriggerTest(BaseMetricAlertMigrationTest):
         assert resolve_detector_trigger.condition_result == DetectorPriorityLevel.OK
         assert resolve_detector_trigger.condition_group == detector.workflow_condition_group
 
-        resolve_data_condition = DataCondition.objects.get(comparison=DetectorPriorityLevel.OK)
+        resolve_data_condition = DataCondition.objects.get(
+            type=Condition.ISSUE_PRIORITY_DEESCALATING
+        )
 
-        assert resolve_data_condition.type == Condition.ISSUE_PRIORITY_EQUALS
+        assert resolve_data_condition.type == Condition.ISSUE_PRIORITY_DEESCALATING
         assert resolve_data_condition.condition_result is True
         assert resolve_data_condition.condition_group == resolve_data_condition.condition_group
         assert WorkflowDataConditionGroup.objects.filter(
