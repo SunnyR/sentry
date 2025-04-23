@@ -87,7 +87,7 @@ describe('GroupDetailsLayout', () => {
       body: {committers: []},
     });
     MockApiClient.addMockResponse({
-      url: '/issues/1/autofix/setup/',
+      url: '/organizations/org-slug/issues/1/autofix/setup/',
       body: {
         genAIConsent: {ok: false},
         integration: {ok: true},

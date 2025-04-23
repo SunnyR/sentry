@@ -18,6 +18,7 @@ import {space} from 'sentry/styles/space';
 import marked, {singleLineRenderer} from 'sentry/utils/marked';
 import {useMutation, useQueryClient} from 'sentry/utils/queryClient';
 import useApi from 'sentry/utils/useApi';
+import useOrganization from 'sentry/utils/useOrganization';
 
 interface AutofixInsightCardProps {
   groupId: string;
@@ -399,6 +400,7 @@ function AutofixInsightCards({
 function useUpdateInsightCard({groupId, runId}: {groupId: string; runId: string}) {
   const api = useApi({persistInFlight: true});
   const queryClient = useQueryClient();
+  const orgSlug = useOrganization().slug;
 
   return useMutation({
     mutationFn: (params: {
@@ -406,21 +408,24 @@ function useUpdateInsightCard({groupId, runId}: {groupId: string; runId: string}
       retain_insight_card_index: number | null;
       step_index: number;
     }) => {
-      return api.requestPromise(`/issues/${groupId}/autofix/update/`, {
-        method: 'POST',
-        data: {
-          run_id: runId,
-          payload: {
-            type: 'restart_from_point_with_feedback',
-            message: params.message.trim(),
-            step_index: params.step_index,
-            retain_insight_card_index: params.retain_insight_card_index,
+      return api.requestPromise(
+        `/organizations/${orgSlug}/issues/${groupId}/autofix/update/`,
+        {
+          method: 'POST',
+          data: {
+            run_id: runId,
+            payload: {
+              type: 'restart_from_point_with_feedback',
+              message: params.message.trim(),
+              step_index: params.step_index,
+              retain_insight_card_index: params.retain_insight_card_index,
+            },
           },
-        },
-      });
+        }
+      );
     },
     onSuccess: _ => {
-      queryClient.invalidateQueries({queryKey: makeAutofixQueryKey(groupId)});
+      queryClient.invalidateQueries({queryKey: makeAutofixQueryKey(orgSlug, groupId)});
       addSuccessMessage(t('Rethinking this...'));
     },
     onError: () => {

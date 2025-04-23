@@ -51,7 +51,7 @@ describe('StreamlinedSidebar', function () {
     });
 
     MockApiClient.addMockResponse({
-      url: '/issues/1/autofix/setup/',
+      url: '/organizations/org-slug/issues/1/autofix/setup/',
       body: {
         genAIConsent: {ok: false},
         integration: {ok: true},
@@ -60,7 +60,7 @@ describe('StreamlinedSidebar', function () {
     });
 
     MockApiClient.addMockResponse({
-      url: `/issues/${group.id}/autofix/`,
+      url: `/organizations/${organization.slug}/issues/${group.id}/autofix/`,
       body: {steps: []},
     });
 
