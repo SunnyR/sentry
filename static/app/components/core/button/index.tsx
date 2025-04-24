@@ -196,6 +196,7 @@ export function Button({
   href,
   disabled,
   type = 'button',
+  tooltipProps,
   ...props
 }: ButtonProps) {
   const {handleClick, hasChildren, accessibleLabel} = useButtonFunctionality({
@@ -207,12 +208,7 @@ export function Button({
   });
 
   return (
-    <Tooltip
-      skipWrapper
-      {...props.tooltipProps}
-      title={props.title}
-      disabled={!props.title}
-    >
+    <Tooltip skipWrapper {...tooltipProps} title={props.title} disabled={!props.title}>
       <StyledButton
         aria-label={accessibleLabel}
         aria-disabled={disabled}
