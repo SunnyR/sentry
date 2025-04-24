@@ -3,7 +3,6 @@ import isPropValid from '@emotion/is-prop-valid';
 import type {SerializedStyles, Theme} from '@emotion/react';
 import {css} from '@emotion/react';
 import styled from '@emotion/styled';
-import {mergeRefs} from '@react-aria/utils';
 import type {LocationDescriptor} from 'history';
 
 import {Tooltip, type TooltipProps} from 'sentry/components/core/tooltip';
@@ -100,36 +99,11 @@ interface CommonButtonProps {
 type ElementProps<E> = Omit<React.ButtonHTMLAttributes<E>, 'label' | 'size' | 'title'>;
 
 export interface BaseButtonProps extends CommonButtonProps, ElementProps<ButtonElement> {
-  /**
-   * The button is an external link. Similar to the `Link` `external` property.
-   *
-   * @deprecated Use LinkButton instead
-   */
   external?: boolean;
-  /**
-   * @internal Used in the Button forwardRef
-   */
-  forwardRef?: React.Ref<ButtonElement>;
-  /**
-   * When set the button acts as an anchor link. Use with `external` to have
-   * the link open in a new tab.
-   *
-   * @deprecated Use LinkButton instead
-   */
   href?: string;
-  /**
-   * @deprecated Use LinkButton instead
-   */
   preventScrollReset?: boolean;
-  /**
-   * @deprecated Use LinkButton instead
-   */
+  ref?: React.Ref<HTMLButtonElement | HTMLAnchorElement>;
   replace?: boolean;
-  /**
-   * Similar to `href`, but for internal links within the app.
-   *
-   * @deprecated Use LinkButton instead
-   */
   to?: string | LocationDescriptor;
 }
 
@@ -144,98 +118,18 @@ interface ButtonPropsWithAriaLabel extends BaseButtonProps {
 
 export type ButtonProps = ButtonPropsWithoutAriaLabel | ButtonPropsWithAriaLabel;
 
-interface BaseLinkButtonProps extends CommonButtonProps, ElementProps<ButtonElement> {
-  /**
-   * @internal Used in the Button forwardRef
-   */
-  forwardRef?: React.Ref<ButtonElement>;
-}
-
-interface ToLinkButtonProps extends BaseLinkButtonProps {
-  /**
-   * Similar to `href`, but for internal links within the app.
-   */
-  to: string | LocationDescriptor;
-  external?: never;
-  preventScrollReset?: boolean;
-  replace?: boolean;
-}
-
-interface HrefLinkButtonProps extends BaseLinkButtonProps {
-  /**
-   * When set the button acts as an anchor link. Use with `external` to have
-   * the link open in a new tab.
-   */
-  href: string;
-  /**
-   * For use with `href` and `data:` or `blob:` schemes. Tells the browser to
-   * download the contents.
-   *
-   * See: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a#attr-download
-   */
-  download?: HTMLAnchorElement['download'];
-  /**
-   * The button is an external link. Similar to the `Link` `external` property.
-   */
-  external?: boolean;
-}
-
-interface ToLinkButtonPropsWithChildren extends ToLinkButtonProps {
-  children: React.ReactNode;
-}
-
-interface ToLinkButtonPropsWithAriaLabel extends ToLinkButtonProps {
-  'aria-label': string;
-  children?: never;
-}
-
-interface HrefLinkButtonPropsWithChildren extends HrefLinkButtonProps {
-  children: React.ReactNode;
-}
-
-interface HrefLinkButtonPropsWithAriaLabel extends HrefLinkButtonProps {
-  'aria-label': string;
-  children?: never;
-}
-
-export type LinkButtonProps =
-  | ToLinkButtonPropsWithChildren
-  | ToLinkButtonPropsWithAriaLabel
-  | HrefLinkButtonPropsWithChildren
-  | HrefLinkButtonPropsWithAriaLabel;
-
-function BaseButton({
-  size = 'md',
-  to,
-  replace,
-  preventScrollReset,
-  busy,
-  href,
-  title,
-  icon,
-  children,
-  'aria-label': ariaLabel,
-  borderless,
-  translucentBorder,
-  priority,
-  disabled,
-  type = 'button',
-  tooltipProps,
-  onClick,
-  analyticsEventName,
-  analyticsEventKey,
-  analyticsParams,
-  ...buttonProps
-}: ButtonProps) {
+const useButtonFunctionality = (props: ButtonProps) => {
   // Fallbacking aria-label to string children is not necessary as screen
   // readers natively understand that scenario. Leaving it here for a bunch of
   // our tests that query by aria-label.
   const accessibleLabel =
-    ariaLabel ?? (typeof children === 'string' ? children : undefined);
+    props['aria-label'] ??
+    (typeof props.children === 'string' ? props.children : undefined);
 
   const useButtonTrackingLogger = () => {
     const hasAnalyticsDebug = window.localStorage?.getItem('DEBUG_ANALYTICS') === '1';
-    const hasCustomAnalytics = analyticsEventName || analyticsEventKey || analyticsParams;
+    const hasCustomAnalytics =
+      props.analyticsEventName || props.analyticsEventKey || props.analyticsParams;
     if (!hasCustomAnalytics || !hasAnalyticsDebug) {
       return () => {};
     }
@@ -243,24 +137,25 @@ function BaseButton({
     return () => {
       // eslint-disable-next-line no-console
       console.log('buttonAnalyticsEvent', {
-        eventKey: analyticsEventKey,
-        eventName: analyticsEventName,
-        priority,
-        href,
-        ...analyticsParams,
+        eventKey: props.analyticsEventKey,
+        eventName: props.analyticsEventName,
+        priority: props.priority,
+        href: props.href,
+        ...props.analyticsParams,
       });
     };
   };
 
   const useButtonTracking =
     HookStore.get('react-hook:use-button-tracking')[0] ?? useButtonTrackingLogger;
+
   const buttonTracking = useButtonTracking({
-    analyticsEventName,
-    analyticsEventKey,
+    analyticsEventName: props.analyticsEventName,
+    analyticsEventKey: props.analyticsEventKey,
     analyticsParams: {
-      priority,
-      href,
-      ...analyticsParams,
+      priority: props.priority,
+      href: props.href,
+      ...props.analyticsParams,
     },
     'aria-label': accessibleLabel || '',
   });
@@ -268,71 +163,89 @@ function BaseButton({
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLButtonElement | HTMLAnchorElement>) => {
       // Don't allow clicks when disabled or busy
-      if (disabled || busy) {
+      if (props.disabled || props.busy) {
         e.preventDefault();
         e.stopPropagation();
         return;
       }
 
       buttonTracking();
-      onClick?.(e);
+      props.onClick?.(e);
     },
-    [disabled, busy, onClick, buttonTracking]
+    [props, buttonTracking]
   );
 
-  const hasChildren = Array.isArray(children)
-    ? children.some(child => !!child || String(child) === '0')
-    : !!children || String(children) === '0';
+  const hasChildren = Array.isArray(props.children)
+    ? props.children.some(child => !!child || String(child) === '0')
+    : !!props.children || String(props.children) === '0';
 
   // Buttons come in 4 flavors: <Link>, <ExternalLink>, <a>, and <button>.
   // Let's use props to determine which to serve up, so we don't have to think about it.
   // *Note* you must still handle tabindex manually.
+
+  return {
+    handleClick,
+    hasChildren,
+    accessibleLabel,
+  };
+};
+
+export function Button({
+  size = 'md',
+  to,
+  href,
+  disabled,
+  type = 'button',
+  ...props
+}: ButtonProps) {
+  const {handleClick, hasChildren, accessibleLabel} = useButtonFunctionality({
+    ...props,
+    to,
+    href,
+    type,
+    disabled,
+  });
+
   return (
-    <Tooltip skipWrapper {...tooltipProps} title={title} disabled={!title}>
+    <Tooltip
+      skipWrapper
+      {...props.tooltipProps}
+      title={props.title}
+      disabled={!props.title}
+    >
       <StyledButton
         aria-label={accessibleLabel}
         aria-disabled={disabled}
-        busy={busy}
         disabled={disabled}
         to={disabled ? undefined : to}
         href={disabled ? undefined : href}
-        replace={replace}
-        preventScrollReset={preventScrollReset}
         size={size}
-        priority={priority}
-        borderless={borderless}
-        translucentBorder={translucentBorder}
         type={type}
-        {...buttonProps}
+        {...props}
         onClick={handleClick}
         role="button"
       >
-        {priority !== 'link' && (
+        {props.priority !== 'link' && (
           <InteractionStateLayer
-            higherOpacity={priority && ['primary', 'danger'].includes(priority)}
+            higherOpacity={
+              props.priority && ['primary', 'danger'].includes(props.priority)
+            }
           />
         )}
-        <ButtonLabel size={size} borderless={borderless}>
-          {icon && (
+        <ButtonLabel size={size} borderless={props.borderless}>
+          {props.icon && (
             <Icon size={size} hasChildren={hasChildren}>
-              <IconDefaultsProvider size={ICON_SIZES[size]}>{icon}</IconDefaultsProvider>
+              <IconDefaultsProvider size={ICON_SIZES[size]}>
+                {props.icon}
+              </IconDefaultsProvider>
             </Icon>
           )}
-          {children}
+          {props.children}
         </ButtonLabel>
       </StyledButton>
     </Tooltip>
   );
 }
-
-export function Button({
-  ref,
-  ...props
-}: ButtonProps & {ref?: React.Ref<HTMLButtonElement>}) {
-  return <BaseButton forwardRef={ref} {...props} />;
-}
-
-Button.displayName = 'Button';
 
 interface StyledButtonPropsWithAriaLabel extends ButtonPropsWithoutAriaLabel {
   theme: Theme;
@@ -347,7 +260,6 @@ type StyledButtonProps =
 
 export const StyledButton = styled(
   ({
-    forwardRef,
     size: _size,
     title: _title,
     type,
@@ -357,13 +269,9 @@ export const StyledButton = styled(
     preventScrollReset,
     href,
     disabled,
-    ref: forwardRefAlt,
+    ref,
     ...props
-  }: ButtonProps & {ref?: React.Ref<HTMLButtonElement | HTMLAnchorElement>}) => {
-    // XXX: There may be two forwarded refs here, one potentially passed from a
-    // wrapped Tooltip, another from callers of Button.
-    const ref = mergeRefs(forwardRef, forwardRefAlt);
-
+  }: ButtonProps) => {
     // Get component to use based on existence of `to` or `href` properties
     // Can be react-router `Link`, `a`, or `button`
     if (to) {
@@ -610,5 +518,82 @@ const Icon = styled('span')<{hasChildren?: boolean; size?: ButtonProps['size']}>
       : '0'};
   flex-shrink: 0;
 `;
+
+interface BaseLinkButtonProps extends CommonButtonProps, ElementProps<ButtonElement> {
+  /**
+   * @internal Used in the Button forwardRef
+   */
+  forwardRef?: React.Ref<ButtonElement>;
+}
+
+interface ToLinkButtonProps extends BaseLinkButtonProps {
+  /**
+   * Similar to `href`, but for internal links within the app.
+   */
+  to: string | LocationDescriptor;
+  external?: never;
+  preventScrollReset?: boolean;
+  replace?: boolean;
+}
+
+interface HrefLinkButtonProps extends BaseLinkButtonProps {
+  /**
+   * When set the button acts as an anchor link. Use with `external` to have
+   * the link open in a new tab.
+   */
+  href: string;
+  /**
+   * For use with `href` and `data:` or `blob:` schemes. Tells the browser to
+   * download the contents.
+   *
+   * See: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a#attr-download
+   */
+  download?: HTMLAnchorElement['download'];
+  /**
+   * The button is an external link. Similar to the `Link` `external` property.
+   */
+  external?: boolean;
+  /**
+   * @internal Used in the Button forwardRef
+   */
+  forwardRef?: React.Ref<ButtonElement>;
+  /**
+   * When set the button acts as an anchor link. Use with `external` to have
+   * the link open in a new tab.
+   */
+  preventScrollReset?: boolean;
+  /**
+   * Determines if the link should replace the current history entry.
+   */
+  replace?: boolean;
+  /**
+   * Similar to `href`, but for internal links within the app.
+   */
+  to?: string | LocationDescriptor;
+}
+
+interface ToLinkButtonPropsWithChildren extends ToLinkButtonProps {
+  children: React.ReactNode;
+}
+
+interface ToLinkButtonPropsWithAriaLabel extends ToLinkButtonProps {
+  'aria-label': string;
+  children?: never;
+}
+
+interface HrefLinkButtonPropsWithChildren extends HrefLinkButtonProps {
+  children: React.ReactNode;
+}
+
+interface HrefLinkButtonPropsWithAriaLabel extends HrefLinkButtonProps {
+  'aria-label': string;
+  children?: never;
+}
+
+export type LinkButtonProps =
+  | ToLinkButtonPropsWithChildren
+  | ToLinkButtonPropsWithAriaLabel
+  | HrefLinkButtonPropsWithChildren
+  | HrefLinkButtonPropsWithAriaLabel;
 
 export const LinkButton = Button as React.ComponentType<LinkButtonProps>;
