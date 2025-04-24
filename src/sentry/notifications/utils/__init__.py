@@ -14,6 +14,7 @@ from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
+from sentry import features
 from sentry.eventstore.models import Event, GroupEvent
 from sentry.incidents.models.alert_rule import AlertRuleTriggerAction
 from sentry.integrations.base import IntegrationFeatures, IntegrationProvider
@@ -36,6 +37,8 @@ from sentry.models.release import Release
 from sentry.models.releasecommit import ReleaseCommit
 from sentry.models.repository import Repository
 from sentry.models.rule import Rule
+from sentry.notifications.notifications.rules import get_key_from_rule_data
+from sentry.notifications.utils.links import create_link_to_workflow
 from sentry.silo.base import region_silo_function
 from sentry.users.services.user import RpcUser
 from sentry.utils.committers import get_serialized_event_file_committers
@@ -137,6 +140,7 @@ def get_email_link_extra_params(
                     "referrer": referrer,
                     "alert_type": str(AlertRuleTriggerAction.Type.EMAIL.name).lower(),
                     "alert_timestamp": alert_timestamp_str,
+                    # TODO(iamrajjoshi): This will be workflow_id in the new UI, might need to update analytics
                     "alert_rule_id": rule_detail.id,
                     **dict(
                         []
@@ -202,9 +206,48 @@ class NotificationRuleDetails:
     status_url: str
 
 
+def get_rules_with_legacy_ids(
+    rules: Sequence[Rule], organization: Organization, project: Project
+) -> Sequence[NotificationRuleDetails]:
+    rules_with_legacy_ids = []
+    for rule in rules:
+        rule_id = get_key_from_rule_data(rule, "legacy_rule_id")
+        rules_with_legacy_ids.append(
+            NotificationRuleDetails(
+                rule_id,
+                rule.label,
+                f"/organizations/{organization.slug}/alerts/rules/{project.slug}/{rule_id}/",
+                f"/organizations/{organization.slug}/alerts/rules/{project.slug}/{rule_id}/details/",
+            )
+        )
+    return rules_with_legacy_ids
+
+
+def get_workflow_links(
+    rules: Sequence[Rule], organization: Organization, project: Project
+) -> Sequence[NotificationRuleDetails]:
+    workflow_links = []
+    for rule in rules:
+        workflow_id = get_key_from_rule_data(rule, "workflow_id")
+        workflow_links.append(
+            NotificationRuleDetails(
+                workflow_id,
+                rule.label,
+                create_link_to_workflow(organization.id, workflow_id),
+                # TODO(iamrajjoshi): Add status url (whatever it is)
+                create_link_to_workflow(organization.id, workflow_id),
+            )
+        )
+    return workflow_links
+
+
 def get_rules(
     rules: Sequence[Rule], organization: Organization, project: Project
 ) -> Sequence[NotificationRuleDetails]:
+    if features.has("organizations:workflow-engine-trigger-actions", organization):
+        return get_rules_with_legacy_ids(rules, organization, project)
+    elif features.has("organizations:workflow-engine-ui-links", organization):
+        return get_workflow_links(rules, organization, project)
     return [
         NotificationRuleDetails(
             rule.id,
@@ -336,7 +379,7 @@ def occurrence_perf_to_email_html(context: Any) -> str:
 
 
 def get_spans(
-    entries: list[dict[str, list[dict[str, str | float]] | str]]
+    entries: list[dict[str, list[dict[str, str | float]] | str]],
 ) -> list[dict[str, str | float]] | None:
     """Get the given event's spans"""
     if not len(entries):
