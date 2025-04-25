@@ -15,7 +15,7 @@ import {OrganizationStats, PAGE_QUERY_PARAMS} from 'sentry/views/organizationSta
 
 import {ChartDataTransform} from './usageChart';
 
-describe('OrganizationStats', function () {
+describe('OrganizationStats', () => {
   const defaultSelection: PageFilters = {
     projects: [],
     environments: [],
@@ -463,7 +463,32 @@ describe('OrganizationStats', function () {
       screen.getByRole('option', {name: 'Continuous Profile Hours'})
     ).toBeInTheDocument();
     // Should show Profiles (transaction) option
+    expect(screen.getByRole('option', {name: 'Profiles (legacy)'})).toBeInTheDocument();
+  });
+
+  it('shows both profile hours without continuous-profiling feature', async () => {
+    const newOrg = initializeOrg({
+      organization: {
+        features: ['global-views', 'team-insights'],
+      },
+    });
+
+    render(<OrganizationStats {...defaultProps} organization={newOrg.organization} />, {
+      router: newOrg.router,
+    });
+
+    await userEvent.click(await screen.findByText('Category'));
+
+    // shows Profiles option
     expect(screen.getByRole('option', {name: 'Profiles'})).toBeInTheDocument();
+
+    // does not show continuous profiling
+    expect(
+      screen.queryByRole('option', {name: 'Continuous Profile Hours'})
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', {name: 'Profiles (legacy)'})
+    ).not.toBeInTheDocument();
   });
 
   it('shows only profile duration category when both profiling features are enabled', async () => {
@@ -513,7 +538,7 @@ describe('OrganizationStats', function () {
     expect(screen.getByRole('option', {name: 'Profiles'})).toBeInTheDocument();
   });
 
-  it('denies access on no projects', async function () {
+  it('denies access on no projects', async () => {
     act(() => ProjectsStore.loadInitialData([]));
 
     render(<OrganizationStats {...defaultProps} />, {
@@ -552,7 +577,7 @@ describe('OrganizationStats', function () {
     ).toBeInTheDocument();
   });
 
-  it('denies access without project membership', async function () {
+  it('denies access without project membership', async () => {
     const newOrg = initializeOrg({
       organization: {
         openMembership: false,
